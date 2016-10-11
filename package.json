@@ -1,0 +1,22 @@
+{
+  "name": "amqp-readable-stream",
+  "version": "0.1.0",
+  "description": "",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wookieb/amqp-readable-stream.git"
+  },
+  "author": "Łukasz Kużyński <lukasz.kuzynski@gmail.com>",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/wookieb/amqp-readable-stream/issues"
+  },
+  "homepage": "https://github.com/wookieb/amqp-readable-stream#readme",
+  "dependencies": {
+    "amqplib": "0.4.*",
+    "async": "2.*",
+    "backoff": "2.*",
+    "debug": "2.*"
+  }
+}
