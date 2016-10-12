@@ -20,6 +20,18 @@ class Message {
         return this._message.headers;
     }
 
+    get queue() {
+        return this._message.fields.queue;
+    }
+
+    get exchange() {
+        return this._message.fields.exchange;
+    }
+
+    get routingKey() {
+        return this._message.fields.routingKey;
+    }
+
     ack() {
         this._ack();
     }
