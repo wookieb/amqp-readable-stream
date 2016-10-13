@@ -5,7 +5,6 @@ class Message {
         this._message = message;
         this._ack = ack;
         this._reject = reject;
-        Object.freeze(this);
     }
 
     get message() {
