@@ -116,6 +116,9 @@ class ConnectionManager extends EventEmitter {
      */
     createStream(queue, exchange, pattern, options) {
         let stream = new ReadableStream(queue, exchange, pattern, options);
+        if (this._channel) {
+            stream.setChannel(this._channel);
+        }
         this.streams.push(stream);
         this.emit('stream', stream);
         return stream;

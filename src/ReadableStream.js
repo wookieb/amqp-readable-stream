@@ -125,15 +125,20 @@ class ReadableStream extends Readable {
 
     setChannel(channel, callback) {
         this._channel = channel;
-        readFromQueue.call(this, (err) => {
-            if (err) {
-                this._debug('Consumption start has failed: ' + err.message);
-                callback && callback(err);
-                return;
-            }
-            this._debug('Consumption has started');
-            callback && callback();
-        });
+
+        if (!this.isPaused()) {
+            readFromQueue.call(this, (err) => {
+                if (err) {
+                    this._debug('Consumption start has failed: ' + err.message);
+                    callback && callback(err);
+                    return;
+                }
+                this._debug('Consumption has started');
+                callback && callback();
+            });
+        } else {
+            callback && process.nextTick(callback);
+        }
     }
 
     stop(callback) {
@@ -142,20 +147,23 @@ class ReadableStream extends Readable {
             return;
         }
 
-        if (this._consumerTag && this._channel) {
-            this._channel.cancel(this._consumerTag, (err) => {
-                if (err) {
-                    this._debug('Failed to pause the stream: ' + err.message);
-                    callback && callback(err);
-                    return;
-                }
-                this._debug('Stream paused');
-                callback && callback();
-            });
-        } else if (callback) {
-            process.nextTick(callback);
+        if (!this._consumerTag || !this._channel) {
+            // No channel, no consumer tag but stream can still be paused
+            super.pause();
+            callback && callback();
+            return;
         }
-        super.pause();
+
+        this._channel.cancel(this._consumerTag, (err) => {
+            if (err) {
+                this._debug('Failed to pause the stream: ' + err.message);
+                callback && callback(err);
+                return;
+            }
+            super.pause();
+            this._debug('Stream paused');
+            callback && callback();
+        });
     }
 
     pause() {
@@ -169,15 +177,21 @@ class ReadableStream extends Readable {
             callback && callback(new Error('The stream is not paused'));
             return;
         }
+
+        if (!this._channel) {
+            callback && callback(new Error('Stream has no channel'));
+            return;
+        }
+
         readFromQueue.call(this, (err) => {
             if (err) {
                 this._debug('Consumption resume has failed: ' + err.message);
                 callback && callback(err);
                 return;
             }
+            super.resume();
             this._debug('Consumption resumed');
             callback && callback();
-            super.resume();
         });
     }
 
