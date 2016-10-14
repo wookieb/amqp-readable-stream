@@ -7,16 +7,24 @@ const debug = require('./debug')('connection-manager');
 const EventEmitter = require('events').EventEmitter;
 const async = require('async');
 
+
 const connect = function (callback) {
-    let call = backoff.call((url, options, callback) => {
+    let call = backoff.call((url, options, cb) => {
 
         this.emit('retry', call.getNumRetries());
         debug('Connecting to queue ... ' + (call.getNumRetries() ? '- Retry #' + call.getNumRetries() : ''));
 
-        amqp.connect(url, options, (err, connection) => {
+        let alreadyCalled = false;
+        let connectCallback = (err, connection) => {
+            // this is necessary to prevent double call of connection callback
+            if (alreadyCalled) {
+                return;
+            }
+            alreadyCalled = true;
+
             if (err) {
                 debug('Connection failed: ' + err.message);
-                callback(err);
+                cb(err);
                 return;
             }
 
@@ -26,9 +34,10 @@ const connect = function (callback) {
             this.emit('connected', connection);
 
             var createChannelFunc = this.options.useConfirmChannel ? connection.createConfirmChannel : connection.createChannel;
-            createChannelFunc.call(connection, callback);
-        });
+            createChannelFunc.call(connection, cb);
+        };
 
+        amqp.connect(url, options, connectCallback);
     }, this.url, this.options.connection, (err, channel) => {
         if (err) {
             debug('Failed to connect: ' + err.message);
