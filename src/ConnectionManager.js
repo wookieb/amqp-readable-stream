@@ -68,12 +68,9 @@ class ConnectionManager extends EventEmitter {
 
         this.streams = [];
 
-        this.url = url;
         this.options = Object.assign({}, {
             useConfirmChannel: true,
-            connection: {
-                heartbeat: 60
-            },
+            connection: {},
             reconnect: {
                 backoffStrategy: new backoff.ExponentialStrategy({
                     initialDelay: 1000,
@@ -84,6 +81,7 @@ class ConnectionManager extends EventEmitter {
             }
         }, options || {});
 
+        this.url = url;
         this._connection = undefined;
         this._channel = undefined;
     }

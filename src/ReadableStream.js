@@ -61,7 +61,7 @@ const consumeQueue = function (queue, callback) {
 
 
 const createNewQueue = function (callback) {
-    this.assertQueue(
+    this._channel.assertQueue(
         '',
         this.options.queue,
         (err, queue) => {
@@ -69,7 +69,7 @@ const createNewQueue = function (callback) {
                 callback(err);
                 return;
             }
-            this.bindQueue(queue.name, this.exchange, this.pattern, (err) => {
+            this._channel.bindQueue(queue.name, this.exchange, this.pattern, (err) => {
                 if (err) {
                     callback(err);
                     return;
