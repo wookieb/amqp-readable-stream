@@ -1,10 +1,11 @@
 'use strict';
 
 class Message {
-    constructor(message, ack, reject) {
+    constructor(message, queue, ack, reject) {
         this._message = message;
         this._ack = ack;
         this._reject = reject;
+        this._queue = queue;
     }
 
     get message() {
@@ -20,7 +21,7 @@ class Message {
     }
 
     get queue() {
-        return this._message.fields.queue;
+        return this._queue;
     }
 
     get exchange() {

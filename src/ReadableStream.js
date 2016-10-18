@@ -37,6 +37,7 @@ const consumeQueue = function (queue, callback) {
         (msg) => {
             const message = new Message(
                 msg,
+                this.queue,
                 this._channel.ack.bind(this._channel, msg),
                 this._channel.nack.bind(this._channel, msg)
             );
