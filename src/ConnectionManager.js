@@ -1,4 +1,4 @@
-'use strict';
+n'use strict';
 
 const ReadableStream = require('./ReadableStream');
 const backoff = require('backoff');
@@ -113,6 +113,7 @@ class ConnectionManager extends EventEmitter {
         })
     }
 
+
     /**
      * @param {string} [queue] is empty then new queue will be created for the stream
      * @param {string} [exchange]
@@ -139,7 +140,7 @@ class ConnectionManager extends EventEmitter {
     stop(callback) {
         async.each(this.streams, (stream, cb) => {
             debug('Stopping consumption for stream: ' + (stream.consumerTag ? stream.consumerTag : '[not consuming yet]'));
-            stream.stop(cb);
+            stream.stopConsumption(cb);
         }, callback);
     }
 }

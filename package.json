@@ -15,13 +15,19 @@
   "homepage": "https://github.com/wookieb/amqp-readable-stream#readme",
   "dependencies": {
     "amqplib": "0.4.*",
-    "async": "2.*",
     "backoff": "2.*",
     "debug": "2.*"
   },
   "devDependencies": {
+    "@types/amqplib": "^0.5.1",
+    "@types/debug": "0.0.29",
+    "@types/jest": "^19.2.2",
+    "@types/node": "^4.0.30",
     "chai": "^3.5.0",
+    "jest": "^19.0.2",
     "mocha": "^3.1.2",
-    "sinon": "^1.17.6"
+    "sinon": "^1.17.6",
+    "ts-jest": "^19.0.8",
+    "typescript": "^2.2.2"
   }
 }

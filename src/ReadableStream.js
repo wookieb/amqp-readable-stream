@@ -4,7 +4,6 @@ const Readable = require('stream').Readable;
 const Message = require('./Message');
 const debug = require('./debug');
 
-
 /**
  * @typedef {Object} ReadableStreamOptions
  * @property {Object} [queue] Check http://www.squaremobius.net/amqp.node/channel_api.html#channel_assertQueue options
@@ -41,6 +40,7 @@ const consumeQueue = function (queue, callback) {
                 this._channel.ack.bind(this._channel, msg),
                 this._channel.nack.bind(this._channel, msg)
             );
+            this.push('data', message)
             this.emit('data', message);
         },
         Object.assign({}, this.options.consumer, {
