@@ -1,16 +1,21 @@
-import ReadableStream from './ReadableStream';
+import ReadableStream, {ExchangeConsumerPolicy, QueueConsumerPolicy} from './ReadableStream';
 import * as amqp from 'amqplib';
 import debugFn from './debug';
 import {EventEmitter} from 'events';
 import promise2Callback from './promise2callback';
-
-const backoff = require('backoff');
+import * as backoff from 'backoff';
+import {ReadableOptions} from "stream";
 
 const debug = debugFn('connection-manager');
 
 export interface ConnectionManagerOptions {
-    connectionOptions: any,
-    reconnectOptions: any
+    connection: any,
+    reconnect: ReconnectOptions
+}
+
+export interface ReconnectOptions {
+    failAfter: number,
+    backoffStrategy: backoff.BackoffStrategy
 }
 
 export default class ConnectionManager extends EventEmitter {
@@ -21,7 +26,7 @@ export default class ConnectionManager extends EventEmitter {
     private channel: amqp.Channel;
 
     static defaultConnectionOptions: any = {};
-    static defaultReconnectOptions: any = {
+    static defaultReconnectOptions: ReconnectOptions = {
         backoffStrategy: new backoff.ExponentialStrategy({
             initialDelay: 1000,
             maxDelay: 30000,
@@ -30,65 +35,75 @@ export default class ConnectionManager extends EventEmitter {
         failAfter: 0,
     };
 
-    constructor(private connectionURL: string, options: ConnectionManagerOptions) {
-
+    constructor(private connectionURL: string, private options: ConnectionManagerOptions) {
+        super();
     }
 
     connect(callback?: Function) {
+        const promise = this.connectWithBackoff();
 
+        promise.then(() => {
+            this.connection.on('close', (err) => {
+                if (err) {
+                    debug('Disconnected - reconnect attempt');
+                    this.connect(callback);
+                } else {
+                    debug('Disconnected');
+                }
+            })
+        })
+            .catch((err) => {
+                debug('Failed to connect');
+                this.emit('error', err);
+            });
+
+        return promise2Callback(this.connectWithBackoff(), callback);
     }
 
     private connectWithBackoff() {
-        let call = backoff.call((url, options, cb) => {
-            this.emit('retry', call.getNumRetries());
-            debug('Connecting to queue ... ' + (call.getNumRetries() ? '- Retry #' + call.getNumRetries() : ''));
+        const connectionOptions = Object.assign({}, ConnectionManager.defaultConnectionOptions, this.options.connection);
 
-            let alreadyCalled = false;
-            let connectCallback = (err, connection) => {
-                // this is necessary to prevent double call of connection callback
-                if (alreadyCalled) {
-                    return;
-                }
-                alreadyCalled = true;
+        return new Promise((resolve, reject) => {
+            const call = backoff.call((url, options, cb) => {
+                this.emit('retry', call.getNumRetries());
+                debug('Connecting to queue ... ' + (call.getNumRetries() ? '- Retry #' + call.getNumRetries() : ''));
 
+                amqp.connect(url, options)
+                    .then((connection) => {
+                        this.connection = connection;
+
+                        debug('Connected!');
+                        this.emit('connected', connection);
+
+                        connection.createChannel(cb);
+                    })
+                    .catch((err) => {
+                        debug('Connection failed: ' + err.message);
+                        cb(err);
+                    });
+
+            }, this.connectionURL, connectionOptions, (err, channel) => {
                 if (err) {
-                    debug('Connection failed: ' + err.message);
-                    cb(err);
+                    reject(err);
                     return;
                 }
 
-                this._connection = connection;
+                this.onChannel(channel);
+                resolve();
+            });
 
-                debug('Connected!');
-                this.emit('connected', connection);
+            const reconnectOptions = <ReconnectOptions>Object.assign({}, ConnectionManager.defaultReconnectOptions, this.options.reconnect);
 
-                var createChannelFunc = this.options.useConfirmChannel ? connection.createConfirmChannel : connection.createChannel;
-                createChannelFunc.call(connection, cb);
-            };
-
-            amqp.connect(url, options, connectCallback);
-        }, this.url, this.options.connection, (err, channel) => {
-            if (err) {
-                debug('Failed to connect: ' + err.message);
-                callback(err);
-                return;
-            }
-
-            this._channel = channel;
-            debug('New channel created');
-            onChannel.call(this, channel);
-
-            this.emit('channel', channel);
-            callback();
+            call.failAfter('failAfter' in reconnectOptions ? reconnectOptions.failAfter : 1);
+            call.setStrategy(reconnectOptions.backoffStrategy ? reconnectOptions.backoffStrategy : new backoff.FibonacciStrategy());
+            call.start();
         });
-
-        call.failAfter(this.options.reconnect ? this.options.reconnect.failAfter : 1);
-        call.setStrategy(this.options.reconnect ? this.options.reconnect.backoffStrategy : new backoff.fibonacci());
-        call.start();
     }
 
     private onChannel(channel: amqp.Channel) {
         this.channel = channel;
+        debug('New channel created');
+        this.emit('channel', channel);
 
         return Promise.all(
             this.streams.map((s) => s.setChannel(channel))
@@ -111,4 +126,59 @@ export default class ConnectionManager extends EventEmitter {
 
         return promise2Callback(promise, callback);
     }
+
+
+    /**
+     * Creates readable stream that that consumes given queue
+     *
+     * @param queue
+     * @param [consumerOptions] options provided to channel.consume
+     * @param [streamOptions] options provided to readable stream constructor
+     * @returns {ReadableStream}
+     */
+    createStreamForQueue(queue: string, consumerOptions?: amqp.Options.Consume, streamOptions?: ReadableOptions) {
+        return this.registerStream(
+            new ReadableStream(
+                new QueueConsumerPolicy(queue, consumerOptions),
+                streamOptions
+            )
+        );
+    }
+
+    /**
+     * Creates readable stream that creates queue bound to given exchange with a pattern.
+     *
+     * @param exchange
+     * @param [pattern]
+     * @param [assertQueueOptions]
+     * @param [consumerOptions]
+     * @param [bindArgs]
+     * @param [streamOptions]
+     * @returns {ReadableStream}
+     */
+    createStreamForExchange(exchange: string,
+                            pattern?: string,
+                            assertQueueOptions?: amqp.Options.AssertQueue,
+                            consumerOptions?: amqp.Options.Consume,
+                            bindArgs?: any,
+                            streamOptions?: ReadableOptions) {
+        return this.registerStream(
+            new ReadableStream(
+                new ExchangeConsumerPolicy(
+                    exchange, pattern, assertQueueOptions, consumerOptions, bindArgs
+                ),
+                streamOptions
+            )
+        );
+    }
+
+    private registerStream(stream: ReadableStream) {
+        if (this.channel) {
+            stream.setChannel(this.channel);
+        }
+        this.streams.push(stream);
+        this.emit('stream', stream);
+        return stream;
+    }
+
 }

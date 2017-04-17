@@ -7,17 +7,12 @@ import promise2callback from './promise2callback';
 import {ReadableOptions} from "stream";
 import Bluebird = require("bluebird");
 
-declare module "stream" {
-    export class Readable {
-        isPaused(): boolean
-    }
-}
-
 abstract class ConsumerPolicy {
 }
 
 export class QueueConsumerPolicy extends ConsumerPolicy {
     constructor(public queue: string, public consumerOptions?: amqp.Options.Consume) {
+        super();
     }
 }
 
@@ -27,6 +22,7 @@ export class ExchangeConsumerPolicy extends ConsumerPolicy {
                 public assertQueueOptions?: amqp.Options.AssertQueue,
                 public consumerOptions?: amqp.Options.Consume,
                 public bindArgs?: any) {
+        super();
     }
 }
 
